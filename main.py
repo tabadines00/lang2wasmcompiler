@@ -12,23 +12,42 @@ class Compiler:
         tokens = line.strip().split()
         if "=" in tokens:  # Handle assignment
             var_name = tokens[0]
-            expr = tokens[2:]
+            expr = " ".join(tokens[2:])  # Join the expression part
             self.add_local(var_name)
             self.compile_expression(expr)
             self.wat += f"    local.set ${var_name}\n"
     
     def compile_expression(self, expr):
-        for token in expr:
-            if token.isdigit():
-                self.wat += f"    i32.const {token}\n"
-            elif token == "+":
+        # Simple infix expression parsing
+        tokens = expr.split()
+        output = []
+        operators = []
+        
+        precedence = {'+': 1, '-': 1, '*': 2}
+        
+        def apply_operator(op):
+            right = output.pop()
+            left = output.pop()
+            self.wat += f"    local.get ${left}\n"
+            self.wat += f"    local.get ${right}\n"
+            if op == '+':
                 self.wat += "    i32.add\n"
-            elif token == "-":
+            elif op == '-':
                 self.wat += "    i32.sub\n"
-            elif token == "*":
+            elif op == '*':
                 self.wat += "    i32.mul\n"
-            else:  # Variable
-                self.wat += f"    local.get ${token}\n"
+        
+        for token in tokens:
+            if token.isdigit() or token in self.locals:
+                output.append(token)
+            elif token in precedence:
+                while (operators and operators[-1] in precedence and
+                       precedence[token] <= precedence[operators[-1]]):
+                    apply_operator(operators.pop())
+                operators.append(token)
+        
+        while operators:
+            apply_operator(operators.pop())
     
     def finish(self):
         self.wat += "  )\n)"  # Close the module and function
